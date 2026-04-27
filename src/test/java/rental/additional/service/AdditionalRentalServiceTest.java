@@ -16,6 +16,8 @@ import rental.additional.dto.AvailabilityResponseDto;
 import rental.additional.dto.CarDto;
 import rental.additional.dto.ClientDto;
 import rental.additional.dto.RentDto;
+import rental.additional.observability.ObservabilityProperties;
+import rental.additional.observability.ObservabilityService;
 
 class AdditionalRentalServiceTest {
 
@@ -24,7 +26,8 @@ class AdditionalRentalServiceTest {
 	private static final UUID OTHER_CITY_CAR_ID = UUID.fromString("550e8400-e29b-41d4-a716-446655440003");
 
 	private final FakeMainCrudClient mainCrudClient = new FakeMainCrudClient();
-	private final AdditionalRentalService service = new AdditionalRentalService(mainCrudClient);
+	private final ObservabilityService observabilityService = new ObservabilityService(new ObservabilityProperties());
+	private final AdditionalRentalService service = new AdditionalRentalService(mainCrudClient, observabilityService);
 
 	@Test
 	void getAvailabilitySplitsCityCarsByRentDate() {
