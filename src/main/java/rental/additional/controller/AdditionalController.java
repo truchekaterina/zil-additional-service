@@ -3,10 +3,7 @@ package rental.additional.controller;
 import java.time.LocalDate;
 import java.util.Map;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,7 +13,6 @@ import rental.additional.dto.AdditionalStatsDto;
 import rental.additional.dto.AvailabilityResponseDto;
 import rental.additional.service.AdditionalRentalService;
 
-@Validated
 @RestController
 @RequestMapping("/additional")
 public class AdditionalController {
@@ -34,9 +30,23 @@ public class AdditionalController {
 
 	@GetMapping({ "/cars/availability", "/cars/available" })
 	public AvailabilityResponseDto getAvailability(
-			@RequestParam @NotBlank String city,
-			@RequestParam @NotNull @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-		return additionalRentalService.getAvailability(city, date);
+			@RequestParam(required = false) String city,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+		String normalizedCity = city == null ? null : city.trim();
+		if (normalizedCity != null && normalizedCity.isEmpty()) {
+			normalizedCity = null;
+		}
+
+		if (normalizedCity != null && date != null) {
+			return additionalRentalService.getAvailability(normalizedCity, date);
+		}
+		if (normalizedCity != null) {
+			return additionalRentalService.getAvailabilityForCityAllDates(normalizedCity);
+		}
+		if (date != null) {
+			return additionalRentalService.getAvailabilityAllCitiesForDate(date);
+		}
+		return additionalRentalService.getAvailabilityAllCitiesAllDates();
 	}
 
 	@GetMapping("/stats")

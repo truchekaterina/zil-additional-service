@@ -31,11 +31,26 @@ class AdditionalRentalServiceTest {
 		AvailabilityResponseDto response = service.getAvailability("moscow", LocalDate.parse("2026-04-03"));
 
 		assertEquals("moscow", response.city());
+		assertEquals(LocalDate.parse("2026-04-03"), response.date());
+		assertEquals(1, response.availableCount());
+		assertEquals(1, response.unavailableCount());
+		assertEquals(2, response.totalCars());
 		assertEquals(1, response.availableCars().size());
 		assertEquals(1, response.unavailableCars().size());
 		assertEquals(AVAILABLE_MOSCOW_CAR_ID, response.availableCars().getFirst().id());
 		assertEquals(RENTED_MOSCOW_CAR_ID, response.unavailableCars().getFirst().id());
 		assertTrue(response.availableCars().stream().noneMatch(car -> OTHER_CITY_CAR_ID.equals(car.id())));
+		assertTrue(response.cities().isEmpty());
+	}
+
+	@Test
+	void getAvailabilityAllCitiesAllDatesUsesNeverRentedSemantics() {
+		AvailabilityResponseDto response = service.getAvailabilityAllCitiesAllDates();
+
+		assertEquals(1, response.availableCount());
+		assertEquals(2, response.unavailableCount());
+		assertEquals(3, response.totalCars());
+		assertEquals(2, response.cities().size());
 	}
 
 	@Test
