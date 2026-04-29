@@ -38,3 +38,7 @@ out/
 
 ### Local artifacts ###
 *.tar
+
+### Cursor IDE ###
+.cursor/
+
