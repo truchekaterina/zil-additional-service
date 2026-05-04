@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import rental.additional.dto.AvailabilityResponseDto;
 import rental.additional.dto.CarDto;
 import rental.additional.dto.ClientDto;
 import rental.additional.dto.RentDto;
+import rental.additional.observability.ObservabilityService;
 
 class AdditionalRentalServiceTest {
 
@@ -24,7 +26,12 @@ class AdditionalRentalServiceTest {
 	private static final UUID OTHER_CITY_CAR_ID = UUID.fromString("550e8400-e29b-41d4-a716-446655440003");
 
 	private final FakeMainCrudClient mainCrudClient = new FakeMainCrudClient();
-	private final AdditionalRentalService service = new AdditionalRentalService(mainCrudClient);
+	private final AdditionalRentalService service = new AdditionalRentalService(
+			mainCrudClient,
+			new ObservabilityService(
+					Duration.ofSeconds(10),
+					Duration.ofSeconds(30),
+					Duration.ofMinutes(1)));
 
 	@Test
 	void getAvailabilitySplitsCityCarsByRentDate() {

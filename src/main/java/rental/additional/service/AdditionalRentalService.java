@@ -19,6 +19,7 @@ import rental.additional.dto.AvailabilityResponseDto;
 import rental.additional.dto.CarDto;
 import rental.additional.dto.CityAvailabilitySummaryDto;
 import rental.additional.dto.RentDto;
+import rental.additional.observability.ObservabilityService;
 
 @Service
 public class AdditionalRentalService {
@@ -26,90 +27,110 @@ public class AdditionalRentalService {
 	private static final String STATS_SOURCE = "main-crud-service";
 
 	private final MainCrudClient mainCrudClient;
+	private final ObservabilityService observabilityService;
 
-	public AdditionalRentalService(MainCrudClient mainCrudClient) {
+	public AdditionalRentalService(
+			MainCrudClient mainCrudClient,
+			ObservabilityService observabilityService) {
 		this.mainCrudClient = mainCrudClient;
+		this.observabilityService = observabilityService;
 	}
 
 	public AvailabilityResponseDto getAvailability(String city, LocalDate date) {
 		String normalizedCity = city.trim();
 		String cityKey = normalizedCity.toLowerCase(Locale.ROOT);
 
-		List<CarDto> carsInCity = mainCrudClient.getCars().stream()
-				.filter(car -> car.city() != null)
-				.filter(car -> car.city().toLowerCase(Locale.ROOT).equals(cityKey))
-				.toList();
-
+		List<CarDto> allCars = mainCrudClient.getCars();
 		Set<UUID> rentedCarIds = rentedCarIdsForDate(date);
 
-		List<CarDto> availableCars = carsInCity.stream()
-				.filter(car -> !rentedCarIds.contains(car.id()))
-				.toList();
+		return observabilityService.timed("additional.statsComputation.availability.cityDate", () -> {
+			List<CarDto> carsInCity = allCars.stream()
+					.filter(car -> car.city() != null)
+					.filter(car -> car.city().toLowerCase(Locale.ROOT).equals(cityKey))
+					.toList();
 
-		List<CarDto> unavailableCars = carsInCity.stream()
-				.filter(car -> rentedCarIds.contains(car.id()))
-				.toList();
+			List<CarDto> availableCars = carsInCity.stream()
+					.filter(car -> !rentedCarIds.contains(car.id()))
+					.toList();
 
-		int total = carsInCity.size();
-		return new AvailabilityResponseDto(
-				normalizedCity,
-				date,
-				availableCars.size(),
-				unavailableCars.size(),
-				total,
-				availableCars,
-				unavailableCars,
-				List.of());
+			List<CarDto> unavailableCars = carsInCity.stream()
+					.filter(car -> rentedCarIds.contains(car.id()))
+					.toList();
+
+			int total = carsInCity.size();
+			return new AvailabilityResponseDto(
+					normalizedCity,
+					date,
+					availableCars.size(),
+					unavailableCars.size(),
+					total,
+					availableCars,
+					unavailableCars,
+					List.of());
+		});
 	}
 
-	/** Все города: на выбранную дату — сколько свободно / занято. */
 	public AvailabilityResponseDto getAvailabilityAllCitiesForDate(LocalDate date) {
-		Map<String, List<CarDto>> byCity = groupCarsByCity(mainCrudClient.getCars());
+		List<CarDto> cars = mainCrudClient.getCars();
+		Map<String, List<CarDto>> byCity = groupCarsByCity(cars);
 		Set<UUID> rentedCarIds = rentedCarIdsForDate(date);
-		List<CityAvailabilitySummaryDto> rows = summarize(byCity, rentedCarIds);
-		return withCityTotals(null, date, rows);
+
+		return observabilityService.timed("additional.statsComputation.availability.allCitiesForDate", () -> {
+			List<CityAvailabilitySummaryDto> rows = summarize(byCity, rentedCarIds);
+			return withCityTotals(null, date, rows);
+		});
 	}
 
-	/** Все города: «на все даты» — машина доступна, если для неё нет ни одной аренды в данных. */
 	public AvailabilityResponseDto getAvailabilityAllCitiesAllDates() {
-		Map<String, List<CarDto>> byCity = groupCarsByCity(mainCrudClient.getCars());
+		List<CarDto> cars = mainCrudClient.getCars();
+		Map<String, List<CarDto>> byCity = groupCarsByCity(cars);
 		Set<UUID> carsWithAnyRent = carsWithAnyRent();
-		List<CityAvailabilitySummaryDto> rows = summarizeNeverRented(byCity, carsWithAnyRent);
-		return withCityTotals(null, null, rows);
+
+		return observabilityService.timed("additional.statsComputation.availability.allCitiesAllDates", () -> {
+			List<CityAvailabilitySummaryDto> rows = summarizeNeverRented(byCity, carsWithAnyRent);
+			return withCityTotals(null, null, rows);
+		});
 	}
 
-	/** Один город без даты: та же логика, что и для «все даты». */
 	public AvailabilityResponseDto getAvailabilityForCityAllDates(String city) {
 		String key = city.trim();
-		return getAvailabilityAllCitiesAllDates().cities().stream()
-				.filter(row -> row.city().equalsIgnoreCase(key))
-				.findFirst()
-				.map(row -> new AvailabilityResponseDto(
-						row.city(),
-						null,
-						row.availableCount(),
-						row.unavailableCount(),
-						row.totalCars(),
-						List.of(),
-						List.of(),
-						List.of()))
-				.orElse(new AvailabilityResponseDto(
-						key,
-						null,
-						0,
-						0,
-						0,
-						List.of(),
-						List.of(),
-						List.of()));
+		return observabilityService.timed("additional.statsComputation.availability.cityAllDates", () -> {
+			List<CarDto> cars = mainCrudClient.getCars();
+			Map<String, List<CarDto>> byCity = groupCarsByCity(cars);
+			Set<UUID> carsWithAnyRent = carsWithAnyRent();
+			List<CityAvailabilitySummaryDto> rows = summarizeNeverRented(byCity, carsWithAnyRent);
+			AvailabilityResponseDto all = withCityTotals(null, null, rows);
+			return all.cities().stream()
+					.filter(row -> row.city().equalsIgnoreCase(key))
+					.findFirst()
+					.map(row -> new AvailabilityResponseDto(
+							row.city(),
+							null,
+							row.availableCount(),
+							row.unavailableCount(),
+							row.totalCars(),
+							List.of(),
+							List.of(),
+							List.of()))
+					.orElse(new AvailabilityResponseDto(
+							key,
+							null,
+							0,
+							0,
+							0,
+							List.of(),
+							List.of(),
+							List.of()));
+		});
 	}
 
 	public AdditionalStatsDto getStats() {
-		return new AdditionalStatsDto(
-				mainCrudClient.getCars().size(),
-				mainCrudClient.getClients().size(),
-				mainCrudClient.getRents().size(),
-				STATS_SOURCE);
+		int nCars = mainCrudClient.getCars().size();
+		int nClients = mainCrudClient.getClients().size();
+		int nRents = mainCrudClient.getRents().size();
+		return observabilityService.timed(
+				"additional.statsComputation.stats",
+				() -> new AdditionalStatsDto(nCars, nClients, nRents, STATS_SOURCE));
 	}
 
 	private Map<String, List<CarDto>> groupCarsByCity(List<CarDto> cars) {
