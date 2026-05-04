@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import rental.additional.dto.AdditionalStatsDto;
+import rental.additional.dto.AvailabilityNewResponseDto;
 import rental.additional.dto.AvailabilityResponseDto;
 import rental.additional.service.AdditionalRentalService;
 
@@ -47,6 +48,21 @@ public class AdditionalController {
 			return additionalRentalService.getAvailabilityAllCitiesForDate(date);
 		}
 		return additionalRentalService.getAvailabilityAllCitiesAllDates();
+	}
+
+	/**
+	 * Как {@link #getAvailability}, но без полей city, date и без списков availableCars / unavailableCars.
+	 */
+	@GetMapping("/cars/availability_new")
+	public AvailabilityNewResponseDto getAvailabilityNew(
+			@RequestParam(required = false) String city,
+			@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+		AvailabilityResponseDto full = getAvailability(city, date);
+		return new AvailabilityNewResponseDto(
+				full.availableCount(),
+				full.unavailableCount(),
+				full.totalCars(),
+				full.cities());
 	}
 
 	@GetMapping("/stats")
