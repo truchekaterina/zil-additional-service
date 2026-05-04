@@ -28,12 +28,15 @@ public class AdditionalRentalService {
 
 	private final MainCrudClient mainCrudClient;
 	private final ObservabilityService observabilityService;
+	private final ClientCacheService clientCacheService;
 
 	public AdditionalRentalService(
 			MainCrudClient mainCrudClient,
-			ObservabilityService observabilityService) {
+			ObservabilityService observabilityService,
+			ClientCacheService clientCacheService) {
 		this.mainCrudClient = mainCrudClient;
 		this.observabilityService = observabilityService;
+		this.clientCacheService = clientCacheService;
 	}
 
 	public AvailabilityResponseDto getAvailability(String city, LocalDate date) {
@@ -125,12 +128,19 @@ public class AdditionalRentalService {
 	}
 
 	public AdditionalStatsDto getStats() {
+		ensureClientCacheForStats();
 		int nCars = mainCrudClient.getCars().size();
-		int nClients = mainCrudClient.getClients().size();
+		int nClients = clientCacheService.size();
 		int nRents = mainCrudClient.getRents().size();
 		return observabilityService.timed(
 				"additional.statsComputation.stats",
 				() -> new AdditionalStatsDto(nCars, nClients, nRents, STATS_SOURCE));
+	}
+
+	private void ensureClientCacheForStats() {
+		if (clientCacheService.size() == 0) {
+			clientCacheService.reloadFrom(mainCrudClient.getClients());
+		}
 	}
 
 	private Map<String, List<CarDto>> groupCarsByCity(List<CarDto> cars) {
