@@ -32,7 +32,8 @@ class AdditionalRentalServiceTest {
 					Duration.ofSeconds(10),
 					Duration.ofSeconds(30),
 					Duration.ofMinutes(1)),
-			new ClientCacheService());
+			new ClientCacheService(),
+			new CarCacheService());
 
 	@Test
 	void getAvailabilitySplitsCityCarsByRentDate() {

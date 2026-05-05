@@ -29,21 +29,24 @@ public class AdditionalRentalService {
 	private final MainCrudClient mainCrudClient;
 	private final ObservabilityService observabilityService;
 	private final ClientCacheService clientCacheService;
+	private final CarCacheService carCacheService;
 
 	public AdditionalRentalService(
 			MainCrudClient mainCrudClient,
 			ObservabilityService observabilityService,
-			ClientCacheService clientCacheService) {
+			ClientCacheService clientCacheService,
+			CarCacheService carCacheService) {
 		this.mainCrudClient = mainCrudClient;
 		this.observabilityService = observabilityService;
 		this.clientCacheService = clientCacheService;
+		this.carCacheService = carCacheService;
 	}
 
 	public AvailabilityResponseDto getAvailability(String city, LocalDate date) {
 		String normalizedCity = city.trim();
 		String cityKey = normalizedCity.toLowerCase(Locale.ROOT);
 
-		List<CarDto> allCars = mainCrudClient.getCars();
+		List<CarDto> allCars = getCarsFromCache();
 		Set<UUID> rentedCarIds = rentedCarIdsForDate(date);
 
 		return observabilityService.timed("additional.statsComputation.availability.cityDate", () -> {
@@ -74,7 +77,7 @@ public class AdditionalRentalService {
 	}
 
 	public AvailabilityResponseDto getAvailabilityAllCitiesForDate(LocalDate date) {
-		List<CarDto> cars = mainCrudClient.getCars();
+		List<CarDto> cars = getCarsFromCache();
 		Map<String, List<CarDto>> byCity = groupCarsByCity(cars);
 		Set<UUID> rentedCarIds = rentedCarIdsForDate(date);
 
@@ -85,7 +88,7 @@ public class AdditionalRentalService {
 	}
 
 	public AvailabilityResponseDto getAvailabilityAllCitiesAllDates() {
-		List<CarDto> cars = mainCrudClient.getCars();
+		List<CarDto> cars = getCarsFromCache();
 		Map<String, List<CarDto>> byCity = groupCarsByCity(cars);
 		Set<UUID> carsWithAnyRent = carsWithAnyRent();
 
@@ -98,7 +101,7 @@ public class AdditionalRentalService {
 	public AvailabilityResponseDto getAvailabilityForCityAllDates(String city) {
 		String key = city.trim();
 		return observabilityService.timed("additional.statsComputation.availability.cityAllDates", () -> {
-			List<CarDto> cars = mainCrudClient.getCars();
+			List<CarDto> cars = getCarsFromCache();
 			Map<String, List<CarDto>> byCity = groupCarsByCity(cars);
 			Set<UUID> carsWithAnyRent = carsWithAnyRent();
 			List<CityAvailabilitySummaryDto> rows = summarizeNeverRented(byCity, carsWithAnyRent);
@@ -129,7 +132,8 @@ public class AdditionalRentalService {
 
 	public AdditionalStatsDto getStats() {
 		ensureClientCacheForStats();
-		int nCars = mainCrudClient.getCars().size();
+		ensureCarCacheForStats();
+		int nCars = carCacheService.size();
 		int nClients = clientCacheService.size();
 		int nRents = mainCrudClient.getRents().size();
 		return observabilityService.timed(
@@ -141,6 +145,17 @@ public class AdditionalRentalService {
 		if (clientCacheService.size() == 0) {
 			clientCacheService.reloadFrom(mainCrudClient.getClients());
 		}
+	}
+
+	private void ensureCarCacheForStats() {
+		if (carCacheService.size() == 0) {
+			carCacheService.reloadFrom(mainCrudClient.getCars());
+		}
+	}
+
+	private List<CarDto> getCarsFromCache() {
+		ensureCarCacheForStats();
+		return carCacheService.getAll();
 	}
 
 	private Map<String, List<CarDto>> groupCarsByCity(List<CarDto> cars) {
