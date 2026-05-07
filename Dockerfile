@@ -6,6 +6,7 @@ COPY gradlew .
 COPY gradle gradle
 COPY settings.gradle .
 COPY build.gradle .
+COPY gradle.properties .
 COPY src src
 
 RUN ["java", "-classpath", "gradle/wrapper/gradle-wrapper.jar", "org.gradle.wrapper.GradleWrapperMain", "clean", "bootJar", "-x", "test", "--no-daemon", "--max-workers=1"]
